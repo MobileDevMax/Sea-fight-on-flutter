@@ -1,0 +1,217 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(SeaFightApp());
+}
+
+class SeaFightApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Sea Fight',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: BattleScreen(),
+    );
+  }
+}
+
+class BattleScreen extends StatefulWidget {
+  @override
+  _BattleScreenState createState() => _BattleScreenState();
+}
+
+class _BattleScreenState extends State<BattleScreen> {
+  static const int gridSize = 10;
+  late List<List<int>> player1Grid; // Ships for player 1
+  late List<List<int>> player2Grid; // Ships for player 2
+  late List<List<int>> player1Hits; // Player 1 hits on Player 2
+  late List<List<int>> player2Hits; // Player 2 hits on Player 1
+  bool isPlayerOneTurn; // Whose turn to shoot
+  bool gameEnded = false; // Game end state
+
+  _BattleScreenState() : isPlayerOneTurn = Random().nextBool();
+
+  @override
+  void initState() {
+    super.initState();
+    resetGame();
+  }
+
+  void resetGame() {
+    player1Grid = List.generate(gridSize, (_) => List.filled(gridSize, 0));
+    player2Grid = List.generate(gridSize, (_) => List.filled(gridSize, 0));
+    player1Hits = List.generate(gridSize, (_) => List.filled(gridSize, 0));
+    player2Hits = List.generate(gridSize, (_) => List.filled(gridSize, 0));
+    placeShips(player1Grid);
+    placeShips(player2Grid);
+    isPlayerOneTurn = Random().nextBool(); // Randomize who goes first
+    gameEnded = false;
+  }
+
+  void placeShips(List<List<int>> grid) {
+    List<int> shipSizes = [1, 1, 1, 1, 2, 2, 3, 3, 4]; // Types of ships
+    Random random = Random();
+
+    for (var size in shipSizes) {
+      bool placed = false;
+      while (!placed) {
+        int row = random.nextInt(gridSize);
+        int col = random.nextInt(gridSize);
+        bool horizontal = random.nextBool();
+
+        if (canPlaceShip(grid, row, col, size, horizontal)) {
+          for (int i = 0; i < size; i++) {
+            if (horizontal) {
+              grid[row][col + i] = size; // Place ship in the grid
+            } else {
+              grid[row + i][col] = size; // Place ship in the grid
+            }
+          }
+          placed = true;
+        }
+      }
+    }
+  }
+
+  bool canPlaceShip(List<List<int>> grid, int row, int col, int size, bool horizontal) {
+    for (int i = 0; i < size; i++) {
+      int r = horizontal ? row : row + i;
+      int c = horizontal ? col + i : col;
+      if (r >= gridSize || c >= gridSize || grid[r][c] != 0) {
+        return false;
+      }
+    }
+    // Check minimum spacing between ships (1 cell)
+    for (int i = -1; i <= size; i++) {
+      for (int j = -1; j <= 1; j++) {
+        int r = horizontal ? row + j : row + i;
+        int c = horizontal ? col + i : col + j;
+        if (r >= 0 && r < gridSize && c >= 0 && c < gridSize && grid[r][c] != 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  void handleTap(int row, int col) {
+    if (gameEnded) return; // Check for game end
+
+    setState(() {
+      if (isPlayerOneTurn) {
+        // Player 1 shoots at Player 2
+        if (player2Hits[row][col] == 0) { // If cell has not been attacked yet
+          if (player2Grid[row][col] > 0) {
+            player2Hits[row][col] = 1; // Hit
+          } else {
+            player2Hits[row][col] = -1; // Miss
+            isPlayerOneTurn = false; // Change turn
+          }
+          // Check for game end
+          if (checkGameEnd(player2Grid)) {
+            gameEnded = true;
+          }
+        }
+      } else {
+        // Player 2 shoots at Player 1
+        if (player1Hits[row][col] == 0) { // If cell has not been attacked yet
+          if (player1Grid[row][col] > 0) {
+            player1Hits[row][col] = 1; // Hit
+          } else {
+            player1Hits[row][col] = -1; // Miss
+            isPlayerOneTurn = true; // Change turn
+          }
+          // Check for game end
+          if (checkGameEnd(player1Grid)) {
+            gameEnded = true;
+          }
+        }
+      }
+    });
+  }
+
+  bool checkGameEnd(List<List<int>> grid) {
+    for (var row in grid) {
+      for (var cell in row) {
+        if (cell > 0) {
+          return false; // If there's at least one cell with a ship
+        }
+      }
+    }
+    return true; // All ships are sunk
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Sea Fight')),
+      body: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text("Player 1", style: TextStyle(fontSize: 24)),
+              buildGrid(player1Hits, false), // Hits on Player 2
+            ],
+          ),
+          SizedBox(width: 20), // Space between fields
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text("Player 2", style: TextStyle(fontSize: 24)),
+              buildGrid(player2Hits, true), // Hits on Player 1
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: gameEnded
+          ? FloatingActionButton(
+              onPressed: resetGame,
+              child: Icon(Icons.refresh),
+            )
+          : null,
+    );
+  }
+
+  Widget buildGrid(List<List<int>> grid, bool isPlayer1) {
+    return Container(
+      margin: EdgeInsets.all(20),
+      child: Column(
+        children: List.generate(gridSize, (row) {
+          return Row(
+            children: List.generate(gridSize, (col) {
+              Color color;
+              if (grid[row][col] == 1) {
+                color = Colors.red; // Hit
+              } else if (grid[row][col] == -1) {
+                color = Colors.white; // Miss
+              } else {
+                color = Colors.blue; // Empty cell
+              }
+
+              return GestureDetector(
+                onTap: (isPlayer1 && !isPlayerOneTurn) || (!isPlayer1 && isPlayerOneTurn)
+                    ? null // Prevent shooting at own cells
+                    : () => handleTap(row, col),
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  margin: EdgeInsets.all(1), // Space between cells
+                  decoration: BoxDecoration(
+                    color: color,
+                    border: Border.all(color: Colors.black),
+                  ),
+                  child: grid[row][col] == -1 
+                      ? Center(child: Text('●', style: TextStyle(fontSize: 20, color: Colors.black, fontWeight: FontWeight.bold)))
+                      : null,
+                ),
+              );
+            }),
+          );
+        }),
+      ),
+    );
+  }
+}
